@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+ 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Canvas</title>
+    <style>
+        canvas{
+             border:1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <canvas width="800" height="600"></canvas>
+    <script src = './js/background.js'> </script>
+    <script src = './js/bird.js'> </script>
+    <script src = './js/pipe.js'> </script>
+    <script>
+        //1.获取canvas画布
+        var cs = document.querySelector('canvas');
+        //2.获取上下文对象（相当于画笔）
+        var ctx = cs.getContext("2d");
+        //3.调用上下文API,设置路径的坐标位置，canvas的左上角为坐标系原点（0，0）
+        
+        var canvasW = cs.width,     //画布的宽度
+            canvasH = cs.height;    //画布的高度
+
+        loadImg(['birds','sky','land','pipe1','pipe2'],function(imgList){
+            //1.获取加载完成的天空背景图片对象，并实例化扩展对象
+            var imgSky = imgList['sky'];
+            //计算需要多少张图片才能铺满canvas画布的系数
+            var coefficient = Math.ceil((canvasW+imgSky.width)/imgSky.width);
+            var imgSkys = createBg({
+                cvs:cs,
+                imgBg:imgSky,
+                width:imgSky.width,
+                height:0,
+                flySpeed:1,
+                coefficient:coefficient
+            })
+            //2.获取加载完成的陆地图片背景对象，并实例化扩展对象
+            var imgLand = imgList['land'];
+            coefficient =  Math.ceil((canvasW+imgLand.width)/imgLand.width);
+            var lands = createBg({
+                cvs:cs,
+                imgBg:imgLand,
+                width:imgLand.width,
+                height:canvasH-imgLand.height,
+                flySpeed:1,
+                coefficient:coefficient
+            })
+            //3.获取加载完成的小鸡图片对象，并实例化扩展对象
+            var imgBird = imgList['birds'];  
+            var flyBird = [new Bird({
+                cvs:cs,
+                img:imgBird,
+                canvasX:100,
+                canvasY:100,
+                declineSpeed:0,
+                rotateAngle:0   
+            })];
+            //4.获取加载完成的管道对象，并实例化扩展对象
+            var imgPipeDown = imgList['pipe1'];
+            var imgPipeUp = imgList['pipe2'];
+            var space = imgPipeUp.width*2;//管道之间的水平初始间隙
+            var gap = 150;//管道之间的垂直初始间隙
+            coefficient =  Math.ceil((canvasW+imgPipeDown.width+space)/(imgPipeDown.width+space));
+            var pipes = [];
+            for(var i=0;i<coefficient;i++){
+                pipes.push(new Pipe({
+                    cvs:cs,
+                    imgPipeDown:imgPipeDown,
+                    imgPipeUp:imgPipeUp,
+                    x:300+i*(imgPipeUp.width+space),
+                    coefficient:coefficient
+                }));
+            }
+            //5.绘制各个实例化对象，并控制其运动
+            var startTime = new Date(),                     //每次fly开始的时间
+                endTime = 0;                                //每次fly结束的时间
+            var flyDistance = 0,
+                gap = 150,
+                moveSpeed = 2;
+                fly();  
+            function fly(){
+                endTime = new Date();                       //获取上次fly结束的时间
+                var offsetTime = endTime-startTime;         //获取上次fly消耗的时间
+                startTime = endTime;                        //将开始时间置为当前此飞行的结束时间，以供下一次使用
+                flyDistance += moveSpeed;
+                if(flyDistance<=9000){
+                    gap = flyDistance%1000==0?gap-10:gap;
+                }else{
+                    moveSpeed = flyDistance%1000==0?moveSpeed+2:moveSpeed;
+                }
+                ctx.clearRect(0,0,canvasW,canvasH);
+                ctx.beginPath();
+
+                var allBg = imgSkys.concat(flyBird).concat(pipes).concat(lands);
+                for(var i=0;i<allBg.length;i++){
+                    allBg[i].draw({
+                        gap:gap,
+                        moveSpeed:moveSpeed,
+                        offsetTime:offsetTime
+                    });
+                }
+                //6.判断小鸟时候超出边界
+                if(flyBird[0].canvasY<0||flyBird[0].canvasY>canvasH-imgLand.height-imgBird.height){
+                    alert("GAME OVER!!!");
+                    return;
+                }
+                //7.判断小鸟是否撞到管道
+                    //分别判断小鸡图片左上角、右上角、右下角、左下角时候碰到管道
+                if(ctx.isPointInPath(flyBird[0].canvasX+10,flyBird[0].canvasY+15)   
+                 ||ctx.isPointInPath(flyBird[0].canvasX+40,flyBird[0].canvasY+15)
+                 ||ctx.isPointInPath(flyBird[0].canvasX+40,flyBird[0].canvasY+35)
+                 ||ctx.isPointInPath(flyBird[0].canvasX+10,flyBird[0].canvasY+35)
+                ){
+                    alert("GAME OVER!!!");
+                    return;
+                }
+                window.requestAnimationFrame(fly);
+            }
+            window.onclick = function(){
+                flyBird[0].declineSpeed = -0.15;
+            }
+
+        });
+
+        //加载所有图片的函数
+        function loadImg(imgArr,callback){
+            var count = 0;
+            var imgList = {};
+            for(var i=0;i<imgArr.length;i++){
+                var img = new Image();
+                var src = "./images/"+imgArr[i]+".png";
+                img.src = src;
+                imgList[imgArr[i]] = img;
+                img.onload = function(){
+                    count++;
+                    if(count == imgArr.length){
+                        callback(imgList);
+                    }
+                }
+            }
+        }
+        //创建背景图片对象数组的函数
+        function createBg(option){
+            var backgrounds = [];
+            for(var i=0;i<option.coefficient;i++){
+                backgrounds.push(new Background({
+                cvs:option.cvs,
+                img:option.imgBg,
+                x:option.width*i,
+                y:option.height,
+                flySpeed:option.flySpeed,
+                coefficient:option.coefficient
+                }));
+            }
+            return backgrounds;
+        }
+    </script>
+</body>
+ 
+</html>
